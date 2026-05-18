@@ -1,0 +1,133 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+  library(Matrix)
+  library(ggtern)
+})
+
+obj_path <- "Z:/Igor/scRNAseq/Aggregoids/2d/4-2Da_2D_conditions_processed.rds"
+out_dir <- "Z:/Igor/scRNAseq/Aggregoids/2d"
+
+obj <- readRDS(obj_path)
+
+obj$condition_2D <- factor(
+  obj$condition_2D,
+  levels = c("UT", "CHIR", "RACL", "TNKSi")
+)
+
+DefaultAssay(obj) <- "RNA"
+obj <- JoinLayers(obj)
+
+gene_sets <- list(
+  PosteriorMesoderm = c("TBXT", "MSGN1", "TBX6", "CDX2", "WNT5B"),
+  APS_DE = c("SOX17", "FOXA2", "CER1", "LEFTY1", "GSC", "HHEX"),
+  StrictPluri = c("POU5F1", "SOX2", "NANOG", "LIN28A", "UTF1", "PRDM14", "DPPA4", "DPPA5")
+)
+
+expr_mat <- LayerData(obj, assay = "RNA", layer = "data")
+
+score_avg_expr <- function(expr_mat, genes) {
+  genes <- intersect(genes, rownames(expr_mat))
+  if (length(genes) < 3) stop("Too few genes found: ", paste(genes, collapse = ", "))
+  Matrix::colMeans(expr_mat[genes, , drop = FALSE])
+}
+
+obj$PosteriorMesoderm_avg <- score_avg_expr(expr_mat, gene_sets$PosteriorMesoderm)
+obj$APS_DE_avg <- score_avg_expr(expr_mat, gene_sets$APS_DE)
+obj$StrictPluri_avg <- score_avg_expr(expr_mat, gene_sets$StrictPluri)
+
+epsilon <- 1e-6
+
+df <- obj@meta.data %>%
+  mutate(
+    PosteriorMesoderm_pos = PosteriorMesoderm_avg + epsilon,
+    APS_DE_pos = APS_DE_avg + epsilon,
+    StrictPluri_pos = StrictPluri_avg + epsilon,
+    total_score = PosteriorMesoderm_pos + APS_DE_pos + StrictPluri_pos,
+    Posterior_Mesoderm = PosteriorMesoderm_pos / total_score,
+    APS_DE = APS_DE_pos / total_score,
+    Strict_Pluripotency = StrictPluri_pos / total_score
+  )
+
+condition_colors <- c(
+  "UT" = "#3B0F70",
+  "CHIR" = "#0047FF",
+  "RACL" = "#FF1A1A",
+  "TNKSi" = "#FFC857"
+)
+
+condition_labels <- c(
+  "UT" = "Pluripotency-biased",
+  "CHIR" = "Posterior PS-biased",
+  "RACL" = "APS/DE-biased",
+  "TNKSi" = "Pluripotency-retained"
+)
+
+p_all <- ggtern(
+  df,
+  aes(
+    x = Posterior_Mesoderm,
+    y = APS_DE,
+    z = Strict_Pluripotency,
+    color = condition_2D
+  )
+) +
+  geom_point(size = 1.1, alpha = 0.5) +
+  scale_color_manual(values = condition_colors, labels = condition_labels) +
+  labs(
+    T = "Posterior mesoderm",
+    L = "APS / definitive endoderm",
+    R = "Strict pluripotency",
+    color = "Condition"
+  ) +
+  theme_bw(base_size = 15) +
+  theme_showarrows() +
+  theme(legend.position = "right")
+
+p_split <- ggtern(
+  df,
+  aes(
+    x = Posterior_Mesoderm,
+    y = APS_DE,
+    z = Strict_Pluripotency,
+    color = condition_2D
+  )
+) +
+  geom_point(size = 1.0, alpha = 0.6) +
+  scale_color_manual(values = condition_colors) +
+  facet_wrap(
+    ~condition_2D,
+    ncol = 2,
+    labeller = labeller(condition_2D = condition_labels)
+  ) +
+  labs(
+    T = "Posterior mesoderm",
+    L = "APS / definitive endoderm",
+    R = "Strict pluripotency"
+  ) +
+  theme_bw(base_size = 14) +
+  theme_showarrows() +
+  theme(legend.position = "none")
+
+print(p_all)
+print(p_split)
+
+ggsave(
+  file.path(out_dir, "ternary_PS_bifurcation_avg_expression_all_conditions.pdf"),
+  p_all,
+  width = 7,
+  height = 6
+)
+
+ggsave(
+  file.path(out_dir, "ternary_PS_bifurcation_avg_expression_split_conditions.pdf"),
+  p_split,
+  width = 10,
+  height = 8
+)
+
+saveRDS(
+  obj,
+  file.path(out_dir, "4-2Da_2D_conditions_PS_bifurcation_avg_expression_scores.rds")
+)
