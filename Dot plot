@@ -1,0 +1,127 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+})
+
+obj_path <- "Z:/Igor/scRNAseq/Aggregoids/2d/4-2Da_2D_conditions_processed.rds"
+out_dir <- "Z:/Igor/scRNAseq/Aggregoids/2d"
+
+obj <- readRDS(obj_path)
+
+obj$condition_2D <- factor(
+  obj$condition_2D,
+  levels = c("UT", "CHIR", "RACL", "TNKSi")
+)
+
+Idents(obj) <- "condition_2D"
+
+gene_modules <- list(
+  Pluripotency = c(
+    "POU5F1", "SOX2", "NANOG", "SALL4", "LIN28A", "TDGF1",
+    "ZIC2", "ZIC3", "DNMT3B", "PRDM14", "DPPA4", "DPPA5", "UTF1"
+  ),
+  ExitPluripotency = c(
+    "OTX2", "ZIC2", "ZIC3", "DNMT3A", "DNMT3B", "FGFR1",
+    "FGFR2", "FZD7", "CD24", "DUSP6", "EGR1", "EGR2"
+  ),
+  Epithelial = c(
+    "CDH1", "EPCAM", "KRT8", "KRT18", "CLDN6", "OCLN", "TJP1"
+  ),
+  EMT = c(
+    "VIM", "SNAI1", "SNAI2", "ZEB1", "ZEB2", "TWIST1",
+    "FN1", "MMP2", "MMP14", "ITGA5", "ITGB1", "CDH2"
+  ),
+  WNT_Response = c(
+    "AXIN2", "LEF1", "TCF7", "SP5", "DKK1", "NOTUM",
+    "NKD1", "NKD2", "LGR5", "MYC", "CCND1"
+  ),
+  Posterior_WNT = c(
+    "TBXT", "CDX1", "CDX2", "MSGN1", "TBX6", "WNT5B",
+    "GBX2", "HOXA1", "HOXB1"
+  ),
+  NODAL_Response = c(
+    "NODAL", "LEFTY1", "LEFTY2", "EOMES", "MIXL1", "GSC",
+    "CER1", "SMAD7", "SKIL", "TGIF1", "ID1"
+  ),
+  APS_DE = c(
+    "SOX17", "FOXA2", "CER1", "LEFTY1", "GSC", "HHEX",
+    "LHX1", "EOMES", "GATA6"
+  ),
+  Hippo_YAP = c(
+    "YAP1", "WWTR1", "TEAD1", "TEAD2", "TEAD3", "TEAD4",
+    "CTGF", "CYR61", "ANKRD1", "AMOTL2", "BIRC5", "AREG"
+  ),
+  Hippo_Regulators = c(
+    "LATS1", "LATS2", "MST1", "MST2", "SAV1", "NF2",
+    "AMOT", "AMOTL1", "AMOTL2"
+  )
+)
+
+genes_use <- unique(unlist(gene_modules))
+genes_present <- genes_use[genes_use %in% rownames(obj)]
+genes_missing <- setdiff(genes_use, rownames(obj))
+
+message("Genes present: ", paste(genes_present, collapse = ", "))
+message("Genes missing: ", paste(genes_missing, collapse = ", "))
+
+dp <- DotPlot(
+  obj,
+  features = genes_present,
+  group.by = "condition_2D",
+  scale = TRUE
+)$data
+
+dp <- dp %>%
+  mutate(
+    id = factor(id, levels = rev(c("UT", "CHIR", "RACL", "TNKSi"))),
+    features.plot = factor(features.plot, levels = genes_present)
+  )
+
+p <- ggplot(dp, aes(x = features.plot, y = id)) +
+  geom_point(
+    aes(size = pct.exp, fill = avg.exp.scaled),
+    shape = 21,
+    color = "black",
+    stroke = 0.35
+  ) +
+  scale_fill_gradient2(
+    low = "#2C5AA0",
+    mid = "white",
+    high = "#B40404",
+    midpoint = 0,
+    name = "Scaled\nexpression"
+  ) +
+  scale_size(
+    range = c(0.3, 7),
+    name = "% cells\nexpressing"
+  ) +
+  labs(
+    title = "D0",
+    x = "Genes",
+    y = "2D condition"
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 8),
+    axis.text.y = element_text(size = 12),
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "right"
+  )
+
+print(p)
+
+ggsave(
+  file.path(out_dir, "dotplot_FULL_state_markers_conditions.pdf"),
+  p,
+  width = 24,
+  height = 5.5
+)
+
+ggsave(
+  file.path(out_dir, "dotplot_FULL_state_markers_conditions.png"),
+  p,
+  width = 24,
+  height = 5.5,
+  dpi = 300
+)
