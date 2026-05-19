@@ -1,0 +1,41 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+})
+
+obj_path <- "Z:/Igor/scRNAseq/Aggregoids/4-2Da_2D_conditions_merged_raw.rds"
+out_path <- "Z:/Igor/scRNAseq/Aggregoids/4-2Da_2D_conditions_processed.rds"
+
+obj <- readRDS(obj_path)
+
+VlnPlot(
+  obj,
+  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+  ncol = 3
+)
+
+obj <- subset(
+  obj,
+  subset = nFeature_RNA > 200 &
+    nFeature_RNA < 7000 &
+    percent.mt < 15
+)
+
+obj <- NormalizeData(obj)
+obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 3000)
+obj <- ScaleData(obj)
+obj <- RunPCA(obj, npcs = 50)
+obj <- FindNeighbors(obj, dims = 1:30)
+obj <- FindClusters(obj, resolution = 0.4)
+obj <- RunUMAP(obj, dims = 1:30)
+
+p_clusters <- DimPlot(obj, reduction = "umap", label = TRUE) +
+  ggtitle("Clusters")
+
+p_conditions <- DimPlot(obj, reduction = "umap", group.by = "condition_2D") +
+  ggtitle("2D conditions")
+
+print(p_clusters)
+print(p_conditions)
+
+saveRDS(obj, out_path)
