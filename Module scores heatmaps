@@ -1,0 +1,138 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+})
+
+output_dir <- "D:/HUMAN GASTRULOID GRAPH"
+obj <- readRDS(file.path(output_dir, "4-2Da_2D_conditions_module_scores.rds"))
+
+score_cols <- grep("_score$", colnames(obj@meta.data), value = TRUE)
+
+score_summary <- obj@meta.data %>%
+  select(condition_2D, all_of(score_cols)) %>%
+  pivot_longer(
+    cols = all_of(score_cols),
+    names_to = "module",
+    values_to = "score"
+  ) %>%
+  group_by(condition_2D, module) %>%
+  summarise(
+    mean_score = mean(score, na.rm = TRUE),
+    median_score = median(score, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+write.csv(
+  score_summary,
+  file.path(output_dir, "Module_score_summary_by_condition.csv"),
+  row.names = FALSE
+)
+
+heat_df <- score_summary %>%
+  select(condition_2D, module, mean_score) %>%
+  group_by(module) %>%
+  mutate(z_score = as.numeric(scale(mean_score))) %>%
+  ungroup()
+
+p_heat <- ggplot(
+  heat_df,
+  aes(x = module, y = condition_2D, fill = z_score)
+) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = round(mean_score, 3)), size = 3.5) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0
+  ) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()
+  ) +
+  labs(fill = "Column Z-score")
+
+ggsave(
+  file.path(output_dir, "Module_score_condition_heatmap_ggplot.pdf"),
+  p_heat,
+  width = 10,
+  height = 5
+)
+
+dot_df <- obj@meta.data %>%
+  select(condition_2D, all_of(score_cols)) %>%
+  pivot_longer(
+    cols = all_of(score_cols),
+    names_to = "module",
+    values_to = "score"
+  ) %>%
+  group_by(module) %>%
+  mutate(high = score > quantile(score, 0.75, na.rm = TRUE)) %>%
+  group_by(condition_2D, module) %>%
+  summarise(
+    mean_score = mean(score, na.rm = TRUE),
+    percent_high = mean(high, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+p_dot <- ggplot(
+  dot_df,
+  aes(x = module, y = condition_2D)
+) +
+  geom_point(aes(size = percent_high, color = mean_score)) +
+  scale_color_gradientn(colors = c("black", "yellow", "magenta")) +
+  theme_classic(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()
+  ) +
+  labs(size = "% high cells", color = "Mean score")
+
+ggsave(
+  file.path(output_dir, "Module_score_dotplot_by_condition.pdf"),
+  p_dot,
+  width = 10,
+  height = 5
+)
+
+score_wide <- obj@meta.data %>%
+  select(all_of(score_cols))
+
+cor_mat <- cor(
+  score_wide,
+  use = "pairwise.complete.obs",
+  method = "spearman"
+)
+
+cor_df <- as.data.frame(as.table(cor_mat))
+colnames(cor_df) <- c("module_1", "module_2", "correlation")
+
+p_cor <- ggplot(
+  cor_df,
+  aes(x = module_1, y = module_2, fill = correlation)
+) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  geom_text(aes(label = round(correlation, 2)), size = 3) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "white",
+    high = "red",
+    midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  theme_classic(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    axis.title = element_blank()
+  ) +
+  labs(fill = "Spearman r")
+
+ggsave(
+  file.path(output_dir, "Module_score_correlation_heatmap_ggplot.pdf"),
+  p_cor,
+  width = 9,
+  height = 8
+)
