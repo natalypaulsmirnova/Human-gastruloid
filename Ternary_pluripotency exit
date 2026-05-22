@@ -1,0 +1,77 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(dplyr)
+  library(ggplot2)
+  library(ggtern)
+})
+
+output_dir <- "D:/HUMAN GASTRULOID GRAPH"
+obj <- readRDS(file.path(output_dir, "4-2Da_2D_conditions_module_scores.rds"))
+
+df <- obj@meta.data %>%
+  select(
+    condition_2D,
+    Pluripotency_score,
+    Pluripotency_exit_score,
+    Primitive_streak_mesendoderm_score
+  ) %>%
+  mutate(
+    Pluripotency_score = pmax(Pluripotency_score, 0),
+    Pluripotency_exit_score = pmax(Pluripotency_exit_score, 0),
+    Primitive_streak_mesendoderm_score = pmax(Primitive_streak_mesendoderm_score, 0),
+    total = Pluripotency_score + Pluripotency_exit_score + Primitive_streak_mesendoderm_score
+  ) %>%
+  filter(total > 0) %>%
+  mutate(
+    Pluripotency = Pluripotency_score / total,
+    Exit = Pluripotency_exit_score / total,
+    Primitive_streak = Primitive_streak_mesendoderm_score / total
+  )
+
+condition_colors <- c(
+  "UT"    = "#3B0F70",
+  "CHIR"  = "#0047FF",
+  "RACL"  = "#FF1A1A",
+  "TNKSi" = "#FFC857"
+)
+
+p <- ggtern(
+  df,
+  aes(
+    x = Pluripotency,
+    y = Exit,
+    z = Primitive_streak,
+    color = condition_2D
+  )
+) +
+  geom_point(size = 0.35, alpha = 0.45) +
+  scale_color_manual(values = condition_colors) +
+  theme_bw(base_size = 14) +
+  labs(
+    T = "Pluripotency",
+    L = "Exit",
+    R = "Primitive streak / mesendoderm",
+    color = "Condition"
+  )
+
+print(p)
+
+ggsave(
+  file.path(output_dir, "Ternary_Pluripotency_Exit_PrimitiveStreak_by_condition.pdf"),
+  p,
+  width = 7,
+  height = 6
+)
+
+p_split <- p +
+  facet_wrap(~condition_2D, ncol = 4) +
+  guides(color = "none")
+
+print(p_split)
+
+ggsave(
+  file.path(output_dir, "Ternary_Pluripotency_Exit_PrimitiveStreak_split_by_condition.pdf"),
+  p_split,
+  width = 14,
+  height = 4
+)
