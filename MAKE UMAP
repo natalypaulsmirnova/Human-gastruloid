@@ -1,0 +1,47 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+})
+
+output_dir <- "D:/HUMAN GASTRULOID GRAPH"
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+obj <- readRDS("Z:/Igor/scRNAseq/Aggregoids/2d/4-2Da_2D_conditions_merged_raw.rds")
+
+obj <- NormalizeData(obj)
+obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 3000)
+obj <- ScaleData(obj)
+obj <- RunPCA(obj, npcs = 50)
+
+pdf(file.path(output_dir, "ElbowPlot.pdf"), width = 6, height = 5)
+print(ElbowPlot(obj))
+dev.off()
+
+obj <- RunUMAP(obj, dims = 1:30)
+obj <- FindNeighbors(obj, dims = 1:30)
+obj <- FindClusters(obj, resolution = 0.4)
+
+condition_colors <- c(
+  "UT"    = "#3B0F70",
+  "CHIR"  = "#0047FF",
+  "RACL"  = "#FF1A1A",
+  "TNKSi" = "#FFC857"
+)
+
+p1 <- DimPlot(obj, reduction = "umap", group.by = "condition_2D",
+              cols = condition_colors, pt.size = 0.4) +
+  theme_classic(base_size = 16)
+
+p2 <- DimPlot(obj, reduction = "umap", group.by = "condition_2D",
+              split.by = "condition_2D", cols = condition_colors,
+              pt.size = 0.4) +
+  theme_classic(base_size = 16)
+
+p3 <- DimPlot(obj, reduction = "umap", label = TRUE, pt.size = 0.4) +
+  theme_classic(base_size = 16)
+
+ggsave(file.path(output_dir, "UMAP_by_condition.pdf"), p1, width = 8, height = 7)
+ggsave(file.path(output_dir, "UMAP_split_by_condition.pdf"), p2, width = 14, height = 4)
+ggsave(file.path(output_dir, "UMAP_clusters.pdf"), p3, width = 8, height = 7)
+
+saveRDS(obj, file.path(output_dir, "4-2Da_2D_conditions_umap_first_pass.rds"))
