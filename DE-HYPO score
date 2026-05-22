@@ -1,0 +1,145 @@
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(ggplot2)
+  library(dplyr)
+  library(tidyr)
+})
+
+output_dir <- "D:/HUMAN GASTRULOID GRAPH"
+obj <- readRDS(file.path(output_dir, "4-2Da_2D_conditions_module_scores.rds"))
+
+DefaultAssay(obj) <- "RNA"
+
+racl <- subset(obj, subset = condition_2D == "RACL")
+
+gene_sets <- list(
+  Hypoblast_YolkSac = c(
+    "GATA6", "GATA4", "PDGFRA", "DAB2", "AMN",
+    "CUBN", "APOA1", "APOA2", "TTR", "AFP",
+    "ALB", "HNF4A", "COL4A1", "LAMA1"
+  ),
+  
+  Definitive_Endoderm = c(
+    "SOX17", "FOXA2", "CXCR4", "EOMES", "MIXL1",
+    "CER1", "GSC", "LHX1", "HHEX", "FOXA1",
+    "EPCAM", "CLDN6", "CLDN7"
+  )
+)
+
+gene_sets <- lapply(gene_sets, function(x) intersect(x, rownames(racl)))
+print(gene_sets)
+
+for (score_name in names(gene_sets)) {
+  racl <- AddModuleScore(
+    racl,
+    features = list(gene_sets[[score_name]]),
+    name = score_name
+  )
+  colnames(racl@meta.data)[ncol(racl@meta.data)] <- paste0(score_name, "_score")
+}
+
+racl$Endoderm_bias <- racl$Definitive_Endoderm_score - racl$Hypoblast_YolkSac_score
+
+p1 <- FeaturePlot(
+  racl,
+  features = c(
+    "Hypoblast_YolkSac_score",
+    "Definitive_Endoderm_score",
+    "Endoderm_bias"
+  ),
+  reduction = "umap",
+  pt.size = 0.4,
+  order = TRUE,
+  keep.scale = "all",
+  ncol = 3
+) &
+  scale_color_gradientn(colors = c("black", "yellow", "magenta")) &
+  theme_classic(base_size = 14)
+
+ggsave(
+  file.path(output_dir, "RACL_Hypoblast_vs_DefinitiveEndoderm_UMAP_scores.pdf"),
+  p1,
+  width = 13,
+  height = 4.5
+)
+
+df <- racl@meta.data %>%
+  mutate(
+    Endoderm_call = case_when(
+      Endoderm_bias > 0.05 ~ "Definitive endoderm-biased",
+      Endoderm_bias < -0.05 ~ "Hypoblast/Yolk sac-biased",
+      TRUE ~ "Intermediate/ambiguous"
+    )
+  )
+
+racl$Endoderm_call <- df$Endoderm_call
+
+p2 <- DimPlot(
+  racl,
+  reduction = "umap",
+  group.by = "Endoderm_call",
+  pt.size = 0.4
+) +
+  theme_classic(base_size = 14)
+
+ggsave(
+  file.path(output_dir, "RACL_Endoderm_bias_classification_UMAP.pdf"),
+  p2,
+  width = 7,
+  height = 6
+)
+
+p3 <- ggplot(
+  df,
+  aes(
+    x = Hypoblast_YolkSac_score,
+    y = Definitive_Endoderm_score,
+    color = Endoderm_call
+  )
+) +
+  geom_point(size = 0.5, alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  theme_classic(base_size = 14) +
+  labs(
+    x = "Hypoblast / Yolk sac score",
+    y = "Definitive endoderm score",
+    color = NULL
+  )
+
+ggsave(
+  file.path(output_dir, "RACL_Hypoblast_vs_DefinitiveEndoderm_score_scatter.pdf"),
+  p3,
+  width = 6,
+  height = 5
+)
+
+FeaturePlot(
+  racl,
+  features = c(
+    "GATA6", "GATA4", "PDGFRA", "DAB2",
+    "SOX17", "FOXA2", "CXCR4", "EOMES"
+  ),
+  reduction = "umap",
+  pt.size = 0.4,
+  order = TRUE,
+  ncol = 4
+) &
+  scale_color_gradientn(colors = c("black", "yellow", "magenta")) &
+  theme_classic(base_size = 12)
+
+ggsave(
+  file.path(output_dir, "RACL_Hypoblast_DE_marker_UMAPs.pdf"),
+  width = 12,
+  height = 7
+)
+
+write.csv(
+  df,
+  file.path(output_dir, "RACL_Hypoblast_vs_DefinitiveEndoderm_scores.csv"),
+  row.names = FALSE
+)
+
+saveRDS(
+  racl,
+  file.path(output_dir, "RACL_Hypoblast_vs_DefinitiveEndoderm_scored.rds")
+)
