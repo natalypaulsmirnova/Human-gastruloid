@@ -1,0 +1,44 @@
+suppressPackageStartupMessages({
+    library(Seurat)
+    library(ggplot2)
+})
+
+obj <- readRDS("D:/HUMAN GASTRULOID GRAPH/4-2Da_2D_conditions_umap_first_pass.rds")
+
+output_dir <- "D:/HUMAN GASTRULOID GRAPH"
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+obj$condition_2D <- factor(
+    obj$condition_2D,
+    levels = c("UT", "CHIR", "RACL", "TNKSi")
+)
+
+DefaultAssay(obj) <- "RNA"
+
+gene <- "TBXT"
+
+p <- FeaturePlot(
+    obj,
+    features = gene,
+    reduction = "umap",
+    split.by = "condition_2D",
+    pt.size = 0.4,
+    order = TRUE,
+    min.cutoff = "q05",
+    max.cutoff = "q95",
+    keep.scale = "all",
+    ncol = 4
+) &
+    scale_color_gradientn(
+        colors = c("black", "white", "magenta")
+    ) &
+    theme_classic(base_size = 14)
+
+print(p)
+
+ggsave(
+    file.path(output_dir, "UMAP_TBXT_split_by_condition.pdf"),
+    plot = p,
+    width = 14,
+    height = 4.5
+)
