@@ -1,0 +1,55 @@
+library(Seurat)
+
+# Input/output files
+input_file <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged/Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP.rds"
+
+output_file <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged/Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP_with_condition.rds"
+
+# Load object
+obj <- readRDS(input_file)
+
+# Check that sample_id exists
+if (!"sample_id" %in% colnames(obj@meta.data)) {
+  stop("Column 'sample_id' not found in metadata.")
+}
+
+# Create new condition column
+obj$condition <- NA_character_
+
+# Double mix
+obj$condition[obj$sample_id %in% c(
+  "2_2_1", "3_2_1", "4_2_1", "5_2_1"
+)] <- "double_mix"
+
+# Triple mix - inner
+obj$condition[obj$sample_id %in% c(
+  "2_3_1", "3_3_1", "4_3_1", "5_3_1"
+)] <- "triple_mix_inner"
+
+# Triple mix - outer
+obj$condition[obj$sample_id %in% c(
+  "2_3_2", "3_3_2", "4_3_2", "5_3_2"
+)] <- "triple_mix_outer"
+
+# Convert to ordered factor
+obj$condition <- factor(
+  obj$condition,
+  levels = c(
+    "double_mix",
+    "triple_mix_inner",
+    "triple_mix_outer"
+  )
+)
+
+# Check mapping
+cat("\nSample IDs by condition:\n")
+print(table(obj$sample_id, obj$condition, useNA = "ifany"))
+
+cat("\nCondition counts:\n")
+print(table(obj$condition, useNA = "ifany"))
+
+# Save updated object
+saveRDS(obj, output_file)
+
+cat("\nSaved updated Seurat object to:\n")
+cat(output_file, "\n")
