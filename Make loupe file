@@ -1,0 +1,44 @@
+library(Seurat)
+library(loupeR)
+
+# Input/output paths
+input_file <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged/Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP_with_condition.rds"
+output_folder <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged"
+
+# Load Seurat object
+obj <- readRDS(input_file)
+
+# Use RNA assay
+DefaultAssay(obj) <- "RNA"
+
+# Check that RNA counts exist
+if (!"RNA" %in% Assays(obj)) {
+  stop("RNA assay not found.")
+}
+
+# Check that UMAP exists
+if (!"umap" %in% Reductions(obj)) {
+  stop("UMAP reduction not found.")
+}
+
+# Set active identities (optional)
+if ("Max_Anno" %in% colnames(obj@meta.data)) {
+  Idents(obj) <- obj$Max_Anno
+}
+
+# Display metadata columns that will be exported
+print(colnames(obj@meta.data))
+
+# Create Loupe file
+create_loupe_from_seurat(
+  obj = obj,
+  output_dir = output_folder,
+  output_name = "Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP_with_condition",
+  force = TRUE
+)
+
+cat("\nLoupe file successfully created:\n")
+cat(file.path(
+  output_folder,
+  "Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP_with_condition.cloupe"
+), "\n")
