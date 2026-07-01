@@ -1,0 +1,136 @@
+library(Seurat)
+library(dplyr)
+library(ggplot2)
+library(ggalluvial)
+library(scales)
+
+if (!requireNamespace("Polychrome", quietly = TRUE)) {
+  install.packages("Polychrome")
+}
+library(Polychrome)
+
+obj <- readRDS("Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Day5_annotated.rds")
+
+df_prop <- obj@meta.data %>%
+  filter(!is.na(orig.ident), !is.na(Anno)) %>%
+  mutate(
+    condition = as.character(orig.ident),
+    Anno = as.character(Anno)
+  ) %>%
+  count(condition, Anno, name = "n") %>%
+  group_by(condition) %>%
+  mutate(
+    total_cells = sum(n),
+    proportion = n / total_cells,
+    percent = proportion * 100
+  ) %>%
+  ungroup()
+
+condition_order <- unique(as.character(obj@meta.data$orig.ident))
+anno_levels <- sort(unique(df_prop$Anno))
+
+df_prop$condition <- factor(df_prop$condition, levels = condition_order)
+df_prop$Anno <- factor(df_prop$Anno, levels = anno_levels)
+
+# Distinct high-contrast palette
+anno_cols <- setNames(
+  Polychrome::createPalette(
+    length(anno_levels),
+    seedcolors = c(
+      "#E41A1C", "#377EB8", "#4DAF4A", "#984EA3",
+      "#FF7F00", "#FFD92F", "#A65628", "#F781BF",
+      "#00CED1", "#000000", "#7FFF00", "#8B0000"
+    )
+  ),
+  anno_levels
+)
+
+p_alluvial <- ggplot(
+  df_prop,
+  aes(
+    x = condition,
+    stratum = Anno,
+    alluvium = Anno,
+    y = proportion,
+    fill = Anno
+  )
+) +
+  geom_flow(
+    stat = "alluvium",
+    lode.guidance = "frontback",
+    alpha = 0.88,
+    color = "grey25",
+    linewidth = 0.12,
+    curve_type = "xspline"
+  ) +
+  geom_stratum(
+    width = 0.55,
+    color = "black",
+    linewidth = 0.28
+  ) +
+  scale_fill_manual(values = anno_cols, drop = FALSE) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    expand = c(0, 0)
+  ) +
+  scale_x_discrete(expand = c(0.08, 0.08)) +
+  labs(
+    x = NULL,
+    y = NULL,
+    fill = NULL
+  ) +
+  theme_classic(base_size = 16) +
+  theme(
+    axis.line = element_line(linewidth = 1, color = "black"),
+    axis.ticks = element_line(linewidth = 0.8, color = "black"),
+    axis.ticks.length = unit(0.18, "cm"),
+    axis.text.x = element_text(
+      size = 15,
+      face = "bold",
+      color = "black",
+      angle = 45,
+      hjust = 1
+    ),
+    axis.text.y = element_text(size = 13, color = "black"),
+    legend.position = "right",
+    legend.key.height = unit(0.45, "cm"),
+    legend.key.width = unit(0.45, "cm"),
+    legend.text = element_text(size = 9),
+    plot.margin = margin(10, 10, 10, 10)
+  ) +
+  guides(
+    fill = guide_legend(
+      ncol = 1,
+      byrow = TRUE,
+      override.aes = list(alpha = 1)
+    )
+  )
+
+print(p_alluvial)
+
+ggsave(
+  "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Day5_Anno_alluvial_polychrome_by_orig_ident.pdf",
+  p_alluvial,
+  width = 9,
+  height = 7
+)
+
+ggsave(
+  "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Day5_Anno_alluvial_polychrome_by_orig_ident.png",
+  p_alluvial,
+  width = 9,
+  height = 7,
+  dpi = 300
+)
+
+write.csv(
+  df_prop,
+  "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Day5_Anno_alluvial_polychrome_by_orig_ident_table.csv",
+  row.names = FALSE
+)
+
+write.csv(
+  data.frame(Anno = anno_levels, Color = anno_cols),
+  "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Day5_Anno_polychrome_color_key.csv",
+  row.names = FALSE
+)
