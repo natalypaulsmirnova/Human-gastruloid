@@ -1,0 +1,55 @@
+library(Seurat)
+library(loupeR)
+
+# Folder
+folder <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS"
+
+# Load merged Seurat object
+combined <- readRDS(
+  file.path(folder, "Human_Gastruloid_AllDays_annotated.rds")
+)
+
+# Use RNA assay
+DefaultAssay(combined) <- "RNA"
+
+# Join Seurat v5 layers: counts.Day2, counts.Day3, etc.
+combined[["RNA"]] <- JoinLayers(combined[["RNA"]])
+
+# Set active annotation
+Idents(combined) <- combined$Max_Anno
+
+# Optional: keep only Loupe-safe metadata columns that exist
+metadata_to_keep <- c(
+  "Day",
+  "sample_id",
+  "Max_Anno",
+  "Gut_Region",
+  "Old Anno",
+  "orig.ident",
+  "Phase"
+)
+
+metadata_to_keep <- metadata_to_keep[
+  metadata_to_keep %in% colnames(combined@meta.data)
+]
+
+combined@meta.data <- combined@meta.data[, metadata_to_keep, drop = FALSE]
+
+# Check object
+print(combined)
+print(table(combined$Day))
+print(colnames(combined@meta.data))
+
+# Save fixed RDS
+saveRDS(
+  combined,
+  file.path(folder, "Human_Gastruloid_AllDays_annotated_joined_layers.rds")
+)
+
+# Create Loupe file
+create_loupe_from_seurat(
+  obj = combined,
+  output_dir = folder,
+  output_name = "Human_Gastruloid_AllDays_annotated",
+  force = TRUE
+)
