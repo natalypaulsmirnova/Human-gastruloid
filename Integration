@@ -1,0 +1,65 @@
+library(Seurat)
+library(loupeR)
+
+folder <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS"
+
+obj <- readRDS(
+  file.path(folder, "Human_Gastruloid_AllDays_annotated_joined_layers.rds")
+)
+
+DefaultAssay(obj) <- "RNA"
+
+# Split layers by Day for integration
+obj[["RNA"]] <- split(obj[["RNA"]], f = obj$Day)
+
+# Preprocessing
+obj <- NormalizeData(obj)
+obj <- FindVariableFeatures(obj)
+obj <- ScaleData(obj)
+obj <- RunPCA(obj, npcs = 50)
+
+# Integration by Day
+obj <- IntegrateLayers(
+  object = obj,
+  method = CCAIntegration,
+  orig.reduction = "pca",
+  new.reduction = "integrated.cca",
+  group.by = "Day"
+)
+
+# UMAP/clustering on integrated space
+obj <- RunUMAP(
+  obj,
+  reduction = "integrated.cca",
+  dims = 1:30,
+  reduction.name = "umap"
+)
+
+obj <- FindNeighbors(
+  obj,
+  reduction = "integrated.cca",
+  dims = 1:30
+)
+
+obj <- FindClusters(obj, resolution = 0.5)
+
+# Join layers again for saving/export
+obj[["RNA"]] <- JoinLayers(obj[["RNA"]])
+
+if ("Max_Anno" %in% colnames(obj@meta.data)) {
+  Idents(obj) <- obj$Max_Anno
+}
+
+# Save integrated RDS
+saveRDS(
+  obj,
+  file.path(folder, "Human_Gastruloid_AllDays_integrated_UMAP.rds")
+)
+
+# Make Loupe file
+create_loupe_from_seurat(
+  obj = obj,
+  output_dir = folder,
+  output_name = "Human_Gastruloid_AllDays_integrated",
+  force = TRUE
+)
