@@ -1,0 +1,63 @@
+library(Seurat)
+library(harmony)
+library(loupeR)
+
+input_file <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged/Human_Gastruloid_AllDays_annotated_joined_layers.rds"
+output_folder <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS/Merged"
+
+obj <- readRDS(input_file)
+
+DefaultAssay(obj) <- "RNA"
+
+# Standard preprocessing
+obj <- NormalizeData(obj)
+obj <- FindVariableFeatures(obj, selection.method = "vst", nfeatures = 3000)
+obj <- ScaleData(obj)
+obj <- RunPCA(obj, npcs = 50)
+
+# Harmony integration by Day
+# No assay.use argument — this works with newer Harmony versions
+obj <- RunHarmony(
+  object = obj,
+  group.by.vars = "Day",
+  reduction = "pca",
+  reduction.save = "harmony"
+)
+
+# UMAP and clustering using Harmony space
+obj <- RunUMAP(
+  object = obj,
+  reduction = "harmony",
+  dims = 1:30,
+  reduction.name = "umap"
+)
+
+obj <- FindNeighbors(
+  object = obj,
+  reduction = "harmony",
+  dims = 1:30
+)
+
+obj <- FindClusters(
+  object = obj,
+  resolution = 0.5
+)
+
+# Set your annotation as active identity
+if ("Max_Anno" %in% colnames(obj@meta.data)) {
+  Idents(obj) <- obj$Max_Anno
+}
+
+# Save integrated RDS
+saveRDS(
+  obj,
+  file.path(output_folder, "Human_Gastruloid_AllDays_Harmony_Day_integrated_UMAP.rds")
+)
+
+# Create Loupe file
+create_loupe_from_seurat(
+  obj = obj,
+  output_dir = output_folder,
+  output_name = "Human_Gastruloid_AllDays_Harmony_Day_integrated",
+  force = TRUE
+)
