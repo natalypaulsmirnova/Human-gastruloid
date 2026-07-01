@@ -1,0 +1,45 @@
+library(Seurat)
+library(loupeR)
+
+folder <- "Z:/Human Gastruloid scRNA-seq/New Annotations RDS"
+
+combined <- readRDS(
+  file.path(folder, "Human_Gastruloid_AllDays_annotated_joined_layers.rds")
+)
+
+DefaultAssay(combined) <- "RNA"
+
+# Normalize and calculate dimensional reduction if missing
+combined <- NormalizeData(combined)
+combined <- FindVariableFeatures(combined)
+combined <- ScaleData(combined)
+combined <- RunPCA(combined, npcs = 50)
+
+# Create UMAP projection required by LoupeR
+combined <- RunUMAP(combined, dims = 1:30)
+
+# Optional clustering, useful in Loupe
+combined <- FindNeighbors(combined, dims = 1:30)
+combined <- FindClusters(combined, resolution = 0.5)
+
+# Set main identity if annotation exists
+if ("Max_Anno" %in% colnames(combined@meta.data)) {
+  Idents(combined) <- combined$Max_Anno
+}
+
+# Check reductions
+print(Reductions(combined))
+
+# Save updated RDS with UMAP
+saveRDS(
+  combined,
+  file.path(folder, "Human_Gastruloid_AllDays_annotated_joined_layers_with_UMAP.rds")
+)
+
+# Make Loupe file
+create_loupe_from_seurat(
+  obj = combined,
+  output_dir = folder,
+  output_name = "Human_Gastruloid_AllDays_annotated",
+  force = TRUE
+)
